@@ -38,7 +38,8 @@ You are a friendly Python tutor for kids aged 6-12. Explain Python in a very sim
 - After data types, move to Module 2 (data structures: lists), then Module 3 (basic operations: addition, subtraction), then Module 4 (loops), then Module 5 (conditionals), and so on.
 - Use examples with things kids like, such as games, animals, or superheroes.
 - Keep answers to one or two short sentences.
-- Only answer questions about Python; if the question is not about Python, say, "Let’s learn some Python!"
+- If the child says "yes" or agrees to practice (e.g., after "Want to practice strings?"), provide a simple practice exercise for the current topic, like "Try making a string for your favorite superhero: <b>`name = 'Iron Man'`</b>. What’s your superhero’s name?"
+- Only answer questions about Python; if the question is not about Python and not an agreement to practice, say, "Let’s learn some Python!"
 - Include a small, simple code example when it helps, like `name = "Spider-Man"` for strings or `is_strong = True` for booleans, and wrap code in <b> tags for bolding (e.g., <b>`code`</b>).
 - Remember what the child has learned and suggest the next topic, like "You know strings! Want to try integers?"
 - End with a fun question like "Want to make a boolean for your favorite superhero?"
@@ -63,6 +64,8 @@ if "last_input" not in st.session_state:
     st.session_state.last_input = None
 if "is_audio_playing" not in st.session_state:
     st.session_state.is_audio_playing = False
+if "current_topic" not in st.session_state:
+    st.session_state.current_topic = "strings"  # Track current topic for practice
 
 # Create the conversation chain
 conversation = ConversationChain(
@@ -153,6 +156,7 @@ with st.sidebar:
             "audio": audio_base64
         })
         st.session_state.last_input = "ready_button"
+        st.session_state.current_topic = "strings"
         logger.info("Ready button pressed, initial response generated")
 
 # Display conversation history
@@ -190,6 +194,9 @@ current_input_id = str(time.time())  # Unique ID for each input
 if user_input and user_input != st.session_state.last_input:
     input_text = user_input
     st.session_state.last_input = input_text
+    # Update current topic based on input
+    if input_text.lower() in ["yes", "sure", "okay", "yep"]:
+        input_text = f"Practice {st.session_state.current_topic}"
     st.session_state.messages.append({"role": "user", "content": input_text})
     with st.chat_message("user"):
         st.markdown(input_text)
@@ -204,6 +211,9 @@ elif audio_bytes and st.session_state.last_input != "audio_input":
             # Use OpenAI Whisper for transcription
             input_text = transcribe_audio(temp_file, os.getenv("OPENAI_API_KEY"))
             st.session_state.last_input = "audio_input"
+            # Update current topic for voice input
+            if input_text.lower() in ["yes", "sure", "okay", "yep"]:
+                input_text = f"Practice {st.session_state.current_topic}"
             st.session_state.messages.append({"role": "user", "content": input_text})
             with st.chat_message("user"):
                 st.markdown(input_text)
@@ -238,7 +248,18 @@ if input_text:
                 for chunk in conversation.stream(input_text):
                     response_text += chunk.get("response", "")
                     response_placeholder.markdown(response_text, unsafe_allow_html=True)
-            # Generate audio asynchronously
+            # Update current topic based on response content
+            if "string" in input_text.lower():
+                st.session_state.current_topic = "strings"
+            elif "integer" in input_text.lower():
+                st.session_state.current_topic = "integers"
+            elif "float" in input_text.lower():
+                st.session_state.current_topic = "floats"
+            elif "boolean" in input_text.lower():
+                st.session_state.current_topic = "booleans"
+            elif "list" in input_text.lower():
+                st.session_state.current_topic = "lists"
+            # Generate audio asynchronously, stripping HTML tags
             with st.spinner("Making audio"):
                 audio_base64 = asyncio.run(async_text_to_speech(response_text.replace("<b>", "").replace("</b>", "")))
             # Cache response
