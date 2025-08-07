@@ -40,7 +40,9 @@ You are a friendly Python tutor for kids aged 6-12. Explain Python in a very sim
 - Use examples with things kids like, such as games, animals, or superheroes.
 - Keep answers to one or two short sentences.
 - If the child says "yes", agrees to practice (e.g., "sure", "okay", "yep"), or requests practice like "Practice strings" or "strings practice", provide a simple practice exercise for the current topic, like "Try making a string for your favorite superhero: <b>`name = 'Iron Man'`</b>. What’s your superhero’s name?"
-- Only answer questions about Python; if the question is not about Python and not an agreement to practice, say, "Let’s learn some Python!"
+- If the child provides a value (e.g., "batman") in response to a practice prompt like "What’s your superhero’s name?", use it in a code example, like "Cool! Try this: <b>`name = 'Batman'`</b>. Want to practice more strings?"
+- If the child asks about "data types", explain Module 1 topics briefly, like "Data types in Python include strings, integers, floats, and booleans. Want to learn about one of them?"
+- Only answer questions about Python; if the question is not about Python, not an agreement to practice, and not a practice response, say, "Let’s learn some Python!"
 - Include a small, simple code example when it helps, like `name = "Spider-Man"` for strings or `is_strong = True` for booleans, and wrap code in <b> tags for bolding (e.g., <b>`code`</b>).
 - Remember what the child has learned and suggest the next topic, like "You know strings! Want to try integers?"
 - End with a fun question like "Want to make a boolean for your favorite superhero?"
@@ -67,6 +69,8 @@ if "is_audio_playing" not in st.session_state:
     st.session_state.is_audio_playing = False
 if "current_topic" not in st.session_state:
     st.session_state.current_topic = "strings"  # Track current topic for practice
+if "expecting_practice_response" not in st.session_state:
+    st.session_state.expecting_practice_response = False  # Track if expecting a practice response
 
 # Create the conversation chain
 conversation = ConversationChain(
@@ -144,7 +148,7 @@ if st.session_state.get("audio_ended", False):
 # Streamlit app
 st.title("Python Tutor Bot for Kids")
 st.write("Hello! I'm your Python teacher. Click 'Ready' in the sidebar to start learning data types, or ask about Python by typing or using your microphone.")
-st.write("Note: Type or speak one question at a time, like 'Practice strings' or 'yes', to hear a clear answer! Code examples will be <b>bold</b>.")
+st.write("Note: Type or speak one question at a time, like 'Practice strings', 'yes', or a superhero name, to hear a clear answer! Code examples will be <b>bold</b>.")
 
 # Sidebar for Ready button
 with st.sidebar:
@@ -158,6 +162,7 @@ with st.sidebar:
         })
         st.session_state.last_input = "ready_button"
         st.session_state.current_topic = "strings"
+        st.session_state.expecting_practice_response = False
         logger.info("Ready button pressed, initial response generated")
 
 # Display conversation history
@@ -198,6 +203,7 @@ if user_input and user_input != st.session_state.last_input:
     # Handle practice requests
     practice_match = re.match(r"^(practice\s*(strings?|integers?|floats?|booleans?|lists?))\b", input_text.lower(), re.IGNORECASE)
     agreement_match = input_text.lower() in ["yes", "sure", "okay", "yep"]
+    data_types_match = re.match(r"^(data\s*types?)\b", input_text.lower(), re.IGNORECASE)
     if agreement_match:
         input_text = f"Practice {st.session_state.current_topic}"
         logger.info(f"Converted agreement input to: {input_text}")
@@ -205,7 +211,17 @@ if user_input and user_input != st.session_state.last_input:
         topic = practice_match.group(1).replace("practice ", "").rstrip("s")
         st.session_state.current_topic = topic
         input_text = f"Practice {topic}"
+        st.session_state.expecting_practice_response = True
         logger.info(f"Converted practice request to: {input_text}")
+    elif data_types_match:
+        input_text = "Explain data types"
+        st.session_state.current_topic = "data_types"
+        st.session_state.expecting_practice_response = False
+        logger.info(f"Converted data types request to: {input_text}")
+    elif st.session_state.expecting_practice_response and st.session_state.current_topic == "strings":
+        # Handle practice response like "batman"
+        input_text = f"Use {input_text} in a string practice"
+        logger.info(f"Converted practice response to: {input_text}")
     st.session_state.messages.append({"role": "user", "content": input_text})
     with st.chat_message("user"):
         st.markdown(input_text)
@@ -223,6 +239,7 @@ elif audio_bytes and st.session_state.last_input != "audio_input":
             # Handle practice requests for voice input
             practice_match = re.match(r"^(practice\s*(strings?|integers?|floats?|booleans?|lists?))\b", input_text.lower(), re.IGNORECASE)
             agreement_match = input_text.lower() in ["yes", "sure", "okay", "yep"]
+            data_types_match = re.match(r"^(data\s*types?)\b", input_text.lower(), re.IGNORECASE)
             if agreement_match:
                 input_text = f"Practice {st.session_state.current_topic}"
                 logger.info(f"Converted voice agreement input to: {input_text}")
@@ -230,7 +247,16 @@ elif audio_bytes and st.session_state.last_input != "audio_input":
                 topic = practice_match.group(1).replace("practice ", "").rstrip("s")
                 st.session_state.current_topic = topic
                 input_text = f"Practice {topic}"
+                st.session_state.expecting_practice_response = True
                 logger.info(f"Converted voice practice request to: {input_text}")
+            elif data_types_match:
+                input_text = "Explain data types"
+                st.session_state.current_topic = "data_types"
+                st.session_state.expecting_practice_response = False
+                logger.info(f"Converted voice data types request to: {input_text}")
+            elif st.session_state.expecting_practice_response and st.session_state.current_topic == "strings":
+                input_text = f"Use {input_text} in a string practice"
+                logger.info(f"Converted voice practice response to: {input_text}")
             st.session_state.messages.append({"role": "user", "content": input_text})
             with st.chat_message("user"):
                 st.markdown(input_text)
@@ -268,14 +294,22 @@ if input_text:
             # Update current topic based on response content
             if "string" in input_text.lower():
                 st.session_state.current_topic = "strings"
+                st.session_state.expecting_practice_response = "practice" in input_text.lower()
             elif "integer" in input_text.lower():
                 st.session_state.current_topic = "integers"
+                st.session_state.expecting_practice_response = "practice" in input_text.lower()
             elif "float" in input_text.lower():
                 st.session_state.current_topic = "floats"
+                st.session_state.expecting_practice_response = "practice" in input_text.lower()
             elif "boolean" in input_text.lower():
                 st.session_state.current_topic = "booleans"
+                st.session_state.expecting_practice_response = "practice" in input_text.lower()
             elif "list" in input_text.lower():
                 st.session_state.current_topic = "lists"
+                st.session_state.expecting_practice_response = "practice" in input_text.lower()
+            elif "data types" in input_text.lower():
+                st.session_state.current_topic = "data_types"
+                st.session_state.expecting_practice_response = False
             # Generate audio asynchronously, stripping HTML tags
             with st.spinner("Making audio"):
                 audio_base64 = asyncio.run(async_text_to_speech(response_text.replace("<b>", "").replace("</b>", "")))
