@@ -34,14 +34,14 @@ llm = ChatOpenAI(
 system_template = """
 You are a friendly Python tutor for kids aged 6-12. Explain Python in a very simple and clear way, like telling a fun story. Follow these instructions exactly:
 
-- Start by teaching basic data types (Module 1: strings, integers, floats) with lots of practice, using examples like strings as superhero names, integers as counting gadgets, or floats as flight speeds.
+- Start by teaching basic data types (Module 1: strings, integers, floats, booleans) with lots of practice, using examples like strings as superhero names, integers as counting gadgets, floats as flight speeds, or booleans as true/false for superhero powers.
 - After data types, move to Module 2 (data structures: lists), then Module 3 (basic operations: addition, subtraction), then Module 4 (loops), then Module 5 (conditionals), and so on.
 - Use examples with things kids like, such as games, animals, or superheroes.
 - Keep answers to one or two short sentences.
 - Only answer questions about Python; if the question is not about Python, say, "Let’s learn some Python!"
-- Include a small, simple code example when it helps, like `name = "Spider-Man"` for strings.
+- Include a small, simple code example when it helps, like `name = "Spider-Man"` for strings or `is_strong = True` for booleans, and wrap code in <b> tags for bolding (e.g., <b>`code`</b>).
 - Remember what the child has learned and suggest the next topic, like "You know strings! Want to try integers?"
-- End with a fun question like "Want to make a string for your favorite superhero?"
+- End with a fun question like "Want to make a boolean for your favorite superhero?"
 - Avoid any inappropriate content, like violence or complex ideas.
 - Do not include formatting characters like ** or * in responses.
 """
@@ -113,7 +113,6 @@ def play_audio(audio_base64):
     </audio>
     <script>
         function resetAudioPlaying() {{
-            // Notify Streamlit that audio playback has ended
             window.parent.postMessage({{type: 'audio_ended'}}, '*');
         }}
     </script>
@@ -126,7 +125,6 @@ components.html("""
 <script>
 window.addEventListener('message', function(event) {
     if (event.data.type === 'audio_ended') {
-        // Update session state via Streamlit (handled in Python)
         window.parent.Streamlit.setComponentValue({audio_ended: true});
     }
 });
@@ -142,12 +140,12 @@ if st.session_state.get("audio_ended", False):
 # Streamlit app
 st.title("Python Tutor Bot for Kids")
 st.write("Hello! I'm your Python teacher. Click 'Ready' in the sidebar to start learning data types, or ask about Python by typing or using your microphone.")
-st.write("Note: Type or speak one question at a time to hear a clear answer!")
+st.write("Note: Type or speak one question at a time to hear a clear answer! Code examples will be <b>bold</b>.")
 
 # Sidebar for Ready button
 with st.sidebar:
     if st.button("Ready"):
-        response_text = "Great! A string is like a word for Spider-Man's name! Try this: `name = \"Spider-Man\"`. Want to practice strings?"
+        response_text = "Great! A string is like a word for Spider-Man's name! Try this: <b>`name = \"Spider-Man\"`</b>. Want to practice strings?"
         audio_base64 = asyncio.run(async_text_to_speech("Great! A string is like a word for Spider-Man's name! Try this: name equals Spider-Man. Want to practice strings?"))
         st.session_state.messages.append({
             "role": "assistant",
@@ -160,7 +158,7 @@ with st.sidebar:
 # Display conversation history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+        st.markdown(message["content"], unsafe_allow_html=True)
         if message["role"] == "assistant" and "audio" in message and not st.session_state.is_audio_playing:
             play_audio(message["audio"])
 
@@ -227,7 +225,7 @@ if input_text:
         if cache_key in st.session_state.response_cache:
             response, audio_base64 = st.session_state.response_cache[cache_key]
             with st.chat_message("assistant"):
-                st.markdown(response)
+                st.markdown(response, unsafe_allow_html=True)
                 if not st.session_state.is_audio_playing:
                     play_audio(audio_base64)
             logger.info(f"Retrieved cached response for: {cache_key}")
@@ -239,10 +237,10 @@ if input_text:
                 response_placeholder = st.empty()
                 for chunk in conversation.stream(input_text):
                     response_text += chunk.get("response", "")
-                    response_placeholder.markdown(response_text)
+                    response_placeholder.markdown(response_text, unsafe_allow_html=True)
             # Generate audio asynchronously
             with st.spinner("Making audio"):
-                audio_base64 = asyncio.run(async_text_to_speech(response_text))
+                audio_base64 = asyncio.run(async_text_to_speech(response_text.replace("<b>", "").replace("</b>", "")))
             # Cache response
             st.session_state.response_cache[cache_key] = (response_text, audio_base64)
             # Play audio if none is currently playing
