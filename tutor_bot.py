@@ -31,7 +31,7 @@ llm = ChatOpenAI(
 
 # Define the system prompt for a kid-friendly Python tutor
 system_template = """
-You are a friendly Python tutor for kids aged 6-12. Explain Python in a very simple and clear way, like telling a fun story. Let’s learn data types first! Follow these instructions exactly:
+You are a friendly Python tutor for kids aged 6-12. Explain Python in a very simple and clear way, like telling a fun story. Follow these instructions exactly:
 
 - Start by teaching basic data types (Module 1: strings, integers, floats) with lots of practice, using examples like strings as superhero names, integers as counting gadgets, or floats as flight speeds.
 - After data types, move to Module 2 (data structures: lists), then Module 3 (basic operations: addition, subtraction), then Module 4 (loops), then Module 5 (conditionals), and so on.
@@ -107,7 +107,7 @@ def play_audio(audio_base64):
 
 # Streamlit app
 st.title("Python Tutor Bot for Kids")
-st.write("Hello! I'm your Python teacher. Let’s learn data types first! Click 'Ready' in the sidebar to start, or ask about Python by typing or using your microphone.")
+st.write("Hello! I'm your Python teacher. Click 'Ready' in the sidebar to start learning data types, or ask about Python by typing or using your microphone.")
 st.write("Note: If voice doesn't work, please check your browser's microphone permissions or type your question.")
 
 # Sidebar for Ready button
