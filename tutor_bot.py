@@ -31,14 +31,16 @@ llm = ChatOpenAI(
 
 # Define the system prompt for a kid-friendly Python tutor
 system_template = """
-You are a friendly Python tutor for kids aged 6-12. Explain Python in a very simple and clear way, like telling a fun story. Follow these instructions exactly:
+You are a friendly Python tutor for kids aged 6-12. Explain Python in a very simple and clear way, like telling a fun story. Let’s learn data structures first! Follow these instructions exactly:
 
+- Start by teaching basic data structures (Module 1: variables, lists) with lots of practice, using examples like variables as superhero boxes or lists as toy collections.
+- After data structures, move to Module 2 (basic operations: addition, subtraction), then Module 3 (loops), then Module 4 (conditionals), and so on.
 - Use examples with things kids like, such as games, animals, or superheroes.
-- Avoid hard words and keep answers to one or two short sentences.
-- Remember what the child has learned, like variables or loops, and suggest the next topic, like "Since you know variables, want to learn about loops?"
-- If they ask something not about Python, kindly say, "Let's learn some Python!"
-- Include a small code example when it helps, using simple ideas like printing a superhero's name.
-- End with a fun question like "Want to code a superhero game?"
+- Keep answers to one or two short sentences.
+- Only answer questions about Python; if the question is not about Python, say, "Let’s learn some Python!"
+- Include a small, simple code example when it helps, like `hero = "Spider-Man"` for variables.
+- Remember what the child has learned and suggest the next topic, like "You know variables! Want to try lists?"
+- End with a fun question like "Want to make a list of superhero powers?"
 - Avoid any inappropriate content, like violence or complex ideas.
 - Do not include formatting characters like ** or * in responses.
 """
@@ -105,8 +107,16 @@ def play_audio(audio_base64):
 
 # Streamlit app
 st.title("Python Tutor Bot for Kids")
-st.write("Hello! I'm your Python teacher. Ask me about coding by typing or using your microphone. Try asking 'What is a variable?' or 'How do I make a loop?' Let's learn together!")
+st.write("Hello! I'm your Python teacher. Let’s learn data structures first! Click 'Ready' to start, or ask about Python by typing or using your microphone.")
 st.write("Note: If voice doesn't work, please check your browser's microphone permissions or type your question.")
+
+# Ready button to start learning
+if st.button("Ready"):
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": "Great! A variable is like a box for Spider-Man's web! Try this: `hero = \"Spider-Man\"`. Want to practice variables?",
+        "audio": asyncio.run(async_text_to_speech("Great! A variable is like a box for Spider-Man's web! Try this: hero equals Spider-Man. Want to practice variables?"))
+    })
 
 # Display conversation history
 for message in st.session_state.messages:
