@@ -31,16 +31,16 @@ llm = ChatOpenAI(
 
 # Define the system prompt for a kid-friendly Python tutor
 system_template = """
-You are a friendly Python tutor for kids aged 6-12. Explain Python in a very simple and clear way, like telling a fun story. Let’s learn data structures first! Follow these instructions exactly:
+You are a friendly Python tutor for kids aged 6-12. Explain Python in a very simple and clear way, like telling a fun story. Let’s learn data types first! Follow these instructions exactly:
 
-- Start by teaching basic data structures (Module 1: variables, lists) with lots of practice, using examples like variables as superhero boxes or lists as toy collections.
-- After data structures, move to Module 2 (basic operations: addition, subtraction), then Module 3 (loops), then Module 4 (conditionals), and so on.
+- Start by teaching basic data types (Module 1: strings, integers, floats) with lots of practice, using examples like strings as superhero names, integers as counting gadgets, or floats as flight speeds.
+- After data types, move to Module 2 (data structures: lists), then Module 3 (basic operations: addition, subtraction), then Module 4 (loops), then Module 5 (conditionals), and so on.
 - Use examples with things kids like, such as games, animals, or superheroes.
 - Keep answers to one or two short sentences.
 - Only answer questions about Python; if the question is not about Python, say, "Let’s learn some Python!"
-- Include a small, simple code example when it helps, like `hero = "Spider-Man"` for variables.
-- Remember what the child has learned and suggest the next topic, like "You know variables! Want to try lists?"
-- End with a fun question like "Want to make a list of superhero powers?"
+- Include a small, simple code example when it helps, like `name = "Spider-Man"` for strings.
+- Remember what the child has learned and suggest the next topic, like "You know strings! Want to try integers?"
+- End with a fun question like "Want to make a string for your favorite superhero?"
 - Avoid any inappropriate content, like violence or complex ideas.
 - Do not include formatting characters like ** or * in responses.
 """
@@ -107,16 +107,19 @@ def play_audio(audio_base64):
 
 # Streamlit app
 st.title("Python Tutor Bot for Kids")
-st.write("Hello! I'm your Python teacher. Let’s learn data structures first! Click 'Ready' to start, or ask about Python by typing or using your microphone.")
+st.write("Hello! I'm your Python teacher. Let’s learn data types first! Click 'Ready' in the sidebar to start, or ask about Python by typing or using your microphone.")
 st.write("Note: If voice doesn't work, please check your browser's microphone permissions or type your question.")
 
-# Ready button to start learning
-if st.button("Ready"):
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": "Great! A variable is like a box for Spider-Man's web! Try this: `hero = \"Spider-Man\"`. Want to practice variables?",
-        "audio": asyncio.run(async_text_to_speech("Great! A variable is like a box for Spider-Man's web! Try this: hero equals Spider-Man. Want to practice variables?"))
-    })
+# Sidebar for Ready button
+with st.sidebar:
+    if st.button("Ready"):
+        response_text = "Great! A string is like a word for Spider-Man's name! Try this: `name = \"Spider-Man\"`. Want to practice strings?"
+        audio_base64 = asyncio.run(async_text_to_speech("Great! A string is like a word for Spider-Man's name! Try this: name equals Spider-Man. Want to practice strings?"))
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": response_text,
+            "audio": audio_base64
+        })
 
 # Display conversation history
 for message in st.session_state.messages:
@@ -125,8 +128,13 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio" in message:
             play_audio(message["audio"])
 
+# Text input
+user_input = st.chat_input("Type your question here")
+if user_input:
+    logger.info(f"Received text input: {user_input}")
+
 # Voice input
-st.write("Record your question:")
+st.write("Or record your question:")
 try:
     audio_bytes = audio_recorder(
         text="Click to record",
@@ -142,12 +150,15 @@ except Exception as e:
     logger.error(f"Audio recorder failed: {str(e)}")
     st.error(f"Sorry, I couldn't record your voice: {str(e)}. Please check microphone permissions or type your question.")
 
-# Text input
-user_input = st.chat_input("Or type your question here")
-
-# Process input (voice or text)
+# Process input (text or voice)
 input_text = None
-if audio_bytes:
+if user_input:
+    input_text = user_input
+    st.session_state.messages.append({"role": "user", "content": input_text})
+    with st.chat_message("user"):
+        st.markdown(input_text)
+    logger.info(f"Processing text input: {input_text}")
+elif audio_bytes:
     with st.spinner("Listening to your question"):
         # Save audio to temporary file
         temp_file = "temp_audio.wav"
@@ -159,17 +170,15 @@ if audio_bytes:
             st.session_state.messages.append({"role": "user", "content": input_text})
             with st.chat_message("user"):
                 st.markdown(input_text)
+            logger.info(f"Processed audio input: {input_text}")
         except Exception as e:
             logger.error(f"Audio processing error: {str(e)}")
             st.error(f"Sorry, I couldn't understand: {str(e)}. Please try speaking again or type your question.")
         finally:
             if os.path.exists(temp_file):
                 os.remove(temp_file)
-elif user_input:
-    input_text = user_input
-    st.session_state.messages.append({"role": "user", "content": input_text})
-    with st.chat_message("user"):
-        st.markdown(input_text)
+else:
+    logger.info("No input received (neither text nor audio)")
 
 # Process bot response
 if input_text:
@@ -181,6 +190,7 @@ if input_text:
             with st.chat_message("assistant"):
                 st.markdown(response)
                 play_audio(audio_base64)
+            logger.info(f"Retrieved cached response for: {cache_key}")
         else:
             # Stream response
             response_container = st.chat_message("assistant")
@@ -203,6 +213,7 @@ if input_text:
                 "content": response_text,
                 "audio": audio_base64
             })
+            logger.info(f"Generated new response for: {cache_key}")
     except Exception as e:
         logger.error(f"Response processing error: {str(e)}")
         st.error(f"Sorry, something went wrong: {str(e)}")
