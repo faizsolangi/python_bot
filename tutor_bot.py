@@ -13,6 +13,7 @@ import asyncio
 import streamlit.components.v1 as components
 from openai import OpenAI
 import logging
+import time
 
 # Set up logging for debugging
 logging.basicConfig(level=logging.INFO)
@@ -51,13 +52,17 @@ prompt = ChatPromptTemplate.from_messages([
     HumanMessagePromptTemplate.from_template("{history}\n{input}")
 ])
 
-# Initialize session state for conversation memory and cache
+# Initialize session state for conversation memory, cache, and playback control
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferMemory(return_messages=True)
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "response_cache" not in st.session_state:
     st.session_state.response_cache = {}
+if "last_input" not in st.session_state:
+    st.session_state.last_input = None
+if "is_audio_playing" not in st.session_state:
+    st.session_state.is_audio_playing = False
 
 # Create the conversation chain
 conversation = ConversationChain(
@@ -95,20 +100,49 @@ def transcribe_audio(audio_file_path, api_key):
         logger.error(f"Whisper transcription failed: {str(e)}")
         raise Exception(f"Whisper transcription failed: {str(e)}")
 
-# Custom HTML for auto-playing audio with fallback
+# Custom HTML for auto-playing audio with playback control
 def play_audio(audio_base64):
+    if st.session_state.is_audio_playing:
+        logger.info("Skipping audio playback as another audio is playing")
+        return
+    st.session_state.is_audio_playing = True
     audio_html = f"""
-    <audio autoplay>
+    <audio id="tutor_audio" autoplay onended="resetAudioPlaying()">
         <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
         Your browser does not support the audio element.
     </audio>
+    <script>
+        function resetAudioPlaying() {{
+            // Notify Streamlit that audio playback has ended
+            window.parent.postMessage({{type: 'audio_ended'}}, '*');
+        }}
+    </script>
     """
     components.html(audio_html, height=0)
+    logger.info("Audio playback started")
+
+# JavaScript listener to reset audio playback flag
+components.html("""
+<script>
+window.addEventListener('message', function(event) {
+    if (event.data.type === 'audio_ended') {
+        // Update session state via Streamlit (handled in Python)
+        window.parent.Streamlit.setComponentValue({audio_ended: true});
+    }
+});
+</script>
+""", height=0)
+
+# Handle audio playback completion
+if st.session_state.get("audio_ended", False):
+    st.session_state.is_audio_playing = False
+    st.session_state.audio_ended = False
+    logger.info("Audio playback completed, resetting is_audio_playing")
 
 # Streamlit app
 st.title("Python Tutor Bot for Kids")
 st.write("Hello! I'm your Python teacher. Click 'Ready' in the sidebar to start learning data types, or ask about Python by typing or using your microphone.")
-st.write("Note: If voice doesn't work, please check your browser's microphone permissions or type your question.")
+st.write("Note: Type or speak one question at a time to hear a clear answer!")
 
 # Sidebar for Ready button
 with st.sidebar:
@@ -120,12 +154,14 @@ with st.sidebar:
             "content": response_text,
             "audio": audio_base64
         })
+        st.session_state.last_input = "ready_button"
+        logger.info("Ready button pressed, initial response generated")
 
 # Display conversation history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-        if message["role"] == "assistant" and "audio" in message:
+        if message["role"] == "assistant" and "audio" in message and not st.session_state.is_audio_playing:
             play_audio(message["audio"])
 
 # Text input
@@ -152,13 +188,15 @@ except Exception as e:
 
 # Process input (text or voice)
 input_text = None
-if user_input:
+current_input_id = str(time.time())  # Unique ID for each input
+if user_input and user_input != st.session_state.last_input:
     input_text = user_input
+    st.session_state.last_input = input_text
     st.session_state.messages.append({"role": "user", "content": input_text})
     with st.chat_message("user"):
         st.markdown(input_text)
-    logger.info(f"Processing text input: {input_text}")
-elif audio_bytes:
+    logger.info(f"Processing text input: {input_text} (ID: {current_input_id})")
+elif audio_bytes and st.session_state.last_input != "audio_input":
     with st.spinner("Listening to your question"):
         # Save audio to temporary file
         temp_file = "temp_audio.wav"
@@ -167,10 +205,11 @@ elif audio_bytes:
                 f.write(audio_bytes)
             # Use OpenAI Whisper for transcription
             input_text = transcribe_audio(temp_file, os.getenv("OPENAI_API_KEY"))
+            st.session_state.last_input = "audio_input"
             st.session_state.messages.append({"role": "user", "content": input_text})
             with st.chat_message("user"):
                 st.markdown(input_text)
-            logger.info(f"Processed audio input: {input_text}")
+            logger.info(f"Processed audio input: {input_text} (ID: {current_input_id})")
         except Exception as e:
             logger.error(f"Audio processing error: {str(e)}")
             st.error(f"Sorry, I couldn't understand: {str(e)}. Please try speaking again or type your question.")
@@ -178,18 +217,19 @@ elif audio_bytes:
             if os.path.exists(temp_file):
                 os.remove(temp_file)
 else:
-    logger.info("No input received (neither text nor audio)")
+    logger.info("No new input received (neither text nor audio)")
 
 # Process bot response
 if input_text:
     try:
-        # Check cache for response
-        cache_key = input_text.lower().strip()
+        # Use unique cache key to avoid reusing old responses
+        cache_key = f"{input_text.lower().strip()}_{current_input_id}"
         if cache_key in st.session_state.response_cache:
             response, audio_base64 = st.session_state.response_cache[cache_key]
             with st.chat_message("assistant"):
                 st.markdown(response)
-                play_audio(audio_base64)
+                if not st.session_state.is_audio_playing:
+                    play_audio(audio_base64)
             logger.info(f"Retrieved cached response for: {cache_key}")
         else:
             # Stream response
@@ -205,8 +245,9 @@ if input_text:
                 audio_base64 = asyncio.run(async_text_to_speech(response_text))
             # Cache response
             st.session_state.response_cache[cache_key] = (response_text, audio_base64)
-            # Auto-play audio
-            play_audio(audio_base64)
+            # Play audio if none is currently playing
+            if not st.session_state.is_audio_playing:
+                play_audio(audio_base64)
             # Store in session state
             st.session_state.messages.append({
                 "role": "assistant",
@@ -217,3 +258,6 @@ if input_text:
     except Exception as e:
         logger.error(f"Response processing error: {str(e)}")
         st.error(f"Sorry, something went wrong: {str(e)}")
+    finally:
+        # Clear input to prevent reprocessing
+        input_text = None
