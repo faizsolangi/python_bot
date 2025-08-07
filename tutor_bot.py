@@ -14,6 +14,7 @@ import streamlit.components.v1 as components
 from openai import OpenAI
 import logging
 import time
+import re
 
 # Set up logging for debugging
 logging.basicConfig(level=logging.INFO)
@@ -38,7 +39,7 @@ You are a friendly Python tutor for kids aged 6-12. Explain Python in a very sim
 - After data types, move to Module 2 (data structures: lists), then Module 3 (basic operations: addition, subtraction), then Module 4 (loops), then Module 5 (conditionals), and so on.
 - Use examples with things kids like, such as games, animals, or superheroes.
 - Keep answers to one or two short sentences.
-- If the child says "yes" or agrees to practice (e.g., after "Want to practice strings?"), provide a simple practice exercise for the current topic, like "Try making a string for your favorite superhero: <b>`name = 'Iron Man'`</b>. What’s your superhero’s name?"
+- If the child says "yes", agrees to practice (e.g., "sure", "okay", "yep"), or requests practice like "Practice strings" or "strings practice", provide a simple practice exercise for the current topic, like "Try making a string for your favorite superhero: <b>`name = 'Iron Man'`</b>. What’s your superhero’s name?"
 - Only answer questions about Python; if the question is not about Python and not an agreement to practice, say, "Let’s learn some Python!"
 - Include a small, simple code example when it helps, like `name = "Spider-Man"` for strings or `is_strong = True` for booleans, and wrap code in <b> tags for bolding (e.g., <b>`code`</b>).
 - Remember what the child has learned and suggest the next topic, like "You know strings! Want to try integers?"
@@ -143,7 +144,7 @@ if st.session_state.get("audio_ended", False):
 # Streamlit app
 st.title("Python Tutor Bot for Kids")
 st.write("Hello! I'm your Python teacher. Click 'Ready' in the sidebar to start learning data types, or ask about Python by typing or using your microphone.")
-st.write("Note: Type or speak one question at a time to hear a clear answer! Code examples will be <b>bold</b>.")
+st.write("Note: Type or speak one question at a time, like 'Practice strings' or 'yes', to hear a clear answer! Code examples will be <b>bold</b>.")
 
 # Sidebar for Ready button
 with st.sidebar:
@@ -194,9 +195,17 @@ current_input_id = str(time.time())  # Unique ID for each input
 if user_input and user_input != st.session_state.last_input:
     input_text = user_input
     st.session_state.last_input = input_text
-    # Update current topic based on input
-    if input_text.lower() in ["yes", "sure", "okay", "yep"]:
+    # Handle practice requests
+    practice_match = re.match(r"^(practice\s*(strings?|integers?|floats?|booleans?|lists?))\b", input_text.lower(), re.IGNORECASE)
+    agreement_match = input_text.lower() in ["yes", "sure", "okay", "yep"]
+    if agreement_match:
         input_text = f"Practice {st.session_state.current_topic}"
+        logger.info(f"Converted agreement input to: {input_text}")
+    elif practice_match:
+        topic = practice_match.group(1).replace("practice ", "").rstrip("s")
+        st.session_state.current_topic = topic
+        input_text = f"Practice {topic}"
+        logger.info(f"Converted practice request to: {input_text}")
     st.session_state.messages.append({"role": "user", "content": input_text})
     with st.chat_message("user"):
         st.markdown(input_text)
@@ -211,9 +220,17 @@ elif audio_bytes and st.session_state.last_input != "audio_input":
             # Use OpenAI Whisper for transcription
             input_text = transcribe_audio(temp_file, os.getenv("OPENAI_API_KEY"))
             st.session_state.last_input = "audio_input"
-            # Update current topic for voice input
-            if input_text.lower() in ["yes", "sure", "okay", "yep"]:
+            # Handle practice requests for voice input
+            practice_match = re.match(r"^(practice\s*(strings?|integers?|floats?|booleans?|lists?))\b", input_text.lower(), re.IGNORECASE)
+            agreement_match = input_text.lower() in ["yes", "sure", "okay", "yep"]
+            if agreement_match:
                 input_text = f"Practice {st.session_state.current_topic}"
+                logger.info(f"Converted voice agreement input to: {input_text}")
+            elif practice_match:
+                topic = practice_match.group(1).replace("practice ", "").rstrip("s")
+                st.session_state.current_topic = topic
+                input_text = f"Practice {topic}"
+                logger.info(f"Converted voice practice request to: {input_text}")
             st.session_state.messages.append({"role": "user", "content": input_text})
             with st.chat_message("user"):
                 st.markdown(input_text)
